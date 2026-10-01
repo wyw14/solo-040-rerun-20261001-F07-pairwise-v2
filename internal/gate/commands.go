@@ -116,6 +116,20 @@ func (c *Commands) Pending(chamberID string) []model.DeviceCommand {
 	return pending
 }
 
+// AllPending collects non-terminal commands across every chamber.
+func (c *Commands) AllPending() []model.DeviceCommand {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var pending []model.DeviceCommand
+	for _, command := range c.byID {
+		if !command.State.Terminal() {
+			pending = append(pending, command)
+		}
+	}
+	return pending
+}
+
+// Get returns a command by ID if present (including terminal ones).
 func (c *Commands) Get(commandID uuid.UUID) (model.DeviceCommand, bool) {
 	c.mu.RLock()
 	command, ok := c.byID[commandID]

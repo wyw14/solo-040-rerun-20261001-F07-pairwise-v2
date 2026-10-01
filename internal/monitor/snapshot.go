@@ -12,36 +12,39 @@ import (
 )
 
 type ChamberView struct {
-	ChamberID string                                 `json:"chamber_id"`
-	Cycle     *model.TransitCycle                    `json:"cycle,omitempty"`
-	Gates     map[model.Direction]model.GatePosition `json:"gates"`
-	Queue     []admission.QueueEntry                 `json:"queue"`
-	Signals   []model.SignalState                    `json:"signals"`
-	Emergency model.EmergencyRecord                  `json:"emergency"`
-	UpdatedAt time.Time                              `json:"updated_at"`
+	ChamberID  string                                 `json:"chamber_id"`
+	Cycle      *model.TransitCycle                    `json:"cycle,omitempty"`
+	Gates      map[model.Direction]model.GatePosition `json:"gates"`
+	Deviations []gate.Deviation                       `json:"deviations"`
+	Queue      []admission.QueueEntry                 `json:"queue"`
+	Signals    []model.SignalState                    `json:"signals"`
+	Emergency  model.EmergencyRecord                  `json:"emergency"`
+	UpdatedAt  time.Time                              `json:"updated_at"`
 }
 
 // Snapshot aggregates current responsibilities without taking ownership.
 type Snapshot struct {
-	cycles  *cycle.Coordinator
-	gates   *gate.State
-	queue   *admission.Service
-	signals *signal.Service
-	safety  *safety.Service
-	now     func() time.Time
+	cycles     *cycle.Coordinator
+	gates      *gate.State
+	deviations *gate.DeviationMonitor
+	queue      *admission.Service
+	signals    *signal.Service
+	safety     *safety.Service
+	now        func() time.Time
 }
 
-func NewSnapshot(cycles *cycle.Coordinator, gates *gate.State, queue *admission.Service, signals *signal.Service, safetyService *safety.Service, now func() time.Time) *Snapshot {
+func NewSnapshot(cycles *cycle.Coordinator, gates *gate.State, deviations *gate.DeviationMonitor, queue *admission.Service, signals *signal.Service, safetyService *safety.Service, now func() time.Time) *Snapshot {
 	if now == nil {
 		now = time.Now
 	}
-	return &Snapshot{cycles: cycles, gates: gates, queue: queue, signals: signals, safety: safetyService, now: now}
+	return &Snapshot{cycles: cycles, gates: gates, deviations: deviations, queue: queue, signals: signals, safety: safetyService, now: now}
 }
 
 func (s *Snapshot) Chamber(chamberID string) ChamberView {
 	view := ChamberView{
 		ChamberID: chamberID, Gates: s.gates.Snapshot(chamberID),
-		Queue: s.queue.List(chamberID), Signals: s.signals.States(),
+		Deviations: s.deviations.Open(chamberID),
+		Queue:      s.queue.List(chamberID), Signals: s.signals.States(),
 		Emergency: s.safety.Status(chamberID), UpdatedAt: s.now().UTC(),
 	}
 	if cycleValue, ok := s.cycles.Current(chamberID); ok {
